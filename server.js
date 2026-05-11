@@ -61,6 +61,7 @@ function createPlayer(side) {
     onGround: true,
     kicking: false,
     kickCooldown: 0,
+    kickTimer: 0,
     speed: PLAYER_SPEED,
     frozen: false,
     frozenTimer: 0,
@@ -300,11 +301,17 @@ function updateGame(room) {
       p.onGround = false;
     }
 
-    // Kick
-    p.kicking = false;
+    // Kick — stays active for several frames so it's easier to connect
     if (input.kick && p.kickCooldown <= 0) {
       p.kicking = true;
-      p.kickCooldown = 15;
+      p.kickTimer = 10; // active for 10 frames
+      p.kickCooldown = 20;
+    }
+    if (p.kickTimer > 0) {
+      p.kickTimer--;
+      p.kicking = true;
+    } else {
+      p.kicking = false;
     }
 
     // Gravity
@@ -408,6 +415,15 @@ function updateGame(room) {
     const p = game.players[side];
     if (circleCollision(p, ball)) {
       resolvePlayerBallCollision(p, ball, p.kicking);
+    } else if (p.kicking) {
+      // Extended kick reach — check if ball is within kick range
+      const dx = ball.x - p.x;
+      const dy = ball.y - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const kickReach = p.radius + ball.radius + 20;
+      if (dist < kickReach) {
+        resolvePlayerBallCollision(p, ball, true);
+      }
     }
   }
 
