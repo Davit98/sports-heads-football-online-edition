@@ -27,7 +27,7 @@ const KICK_FORCE = 12;
 const BALL_DAMPING = 0.99;
 const BALL_GROUND_DAMPING = 0.8;
 const BALL_BOUNCE = 0.7;
-const MATCH_DURATION = 90; // seconds
+const MATCH_DURATION = 60; // seconds
 const POWERUP_INTERVAL = 8000; // ms
 const COUNTDOWN_SECONDS = 3;
 
@@ -176,16 +176,30 @@ function resolvePlayerBallCollision(player, ball, isKicking) {
   ball.x += nx * overlap;
   ball.y += ny * overlap;
 
-  // Apply force
-  let force = isKicking ? KICK_FORCE : 6;
-  // Add player velocity influence
-  ball.vx = nx * force + player.vx * 0.5;
-  ball.vy = ny * force + player.vy * 0.3;
+  if (isKicking) {
+    // Directed shot toward opponent's goal
+    const goalX = player.side === 'left' ? CANVAS_W : 0;
+    const goalY = GOAL_Y + GOAL_HEIGHT * 0.4; // aim slightly above goal center
+    const sdx = goalX - ball.x;
+    const sdy = goalY - ball.y;
+    const sDist = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+    const shotNx = sdx / sDist;
+    const shotNy = sdy / sDist;
 
-  // If heading ball from above, push it down and forward more
-  if (dy > 0 && ny > 0.3) {
-    ball.vy = Math.abs(ball.vy) * 0.5;
-    ball.vx *= 1.3;
+    const SHOT_POWER = 16;
+    ball.vx = shotNx * SHOT_POWER + player.vx * 0.3;
+    ball.vy = shotNy * SHOT_POWER + player.vy * 0.2;
+  } else {
+    // Normal head/body contact — push ball away
+    let force = 6;
+    ball.vx = nx * force + player.vx * 0.5;
+    ball.vy = ny * force + player.vy * 0.3;
+
+    // If heading ball from above, push it down and forward more
+    if (dy > 0 && ny > 0.3) {
+      ball.vy = Math.abs(ball.vy) * 0.5;
+      ball.vx *= 1.3;
+    }
   }
 }
 
