@@ -10,7 +10,7 @@ const ctx = canvas.getContext('2d');
 const CANVAS_W = 800;
 const CANVAS_H = 500;
 const GROUND_Y = 440;
-const GOAL_WIDTH = 20;
+const GOAL_WIDTH = 50;
 const GOAL_HEIGHT = 130;
 const GOAL_Y = GROUND_Y - GOAL_HEIGHT;
 
