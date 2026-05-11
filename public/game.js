@@ -35,9 +35,9 @@ const TEAMS = [
 ];
 
 // Client-side prediction constants (must match server)
-const PLAYER_SPEED = 6;
-const JUMP_FORCE = -11;
-const GRAVITY = 0.55;
+const PLAYER_SPEED = 3.5;
+const JUMP_FORCE = -8;
+const GRAVITY = 0.4;
 const PLAYER_RADIUS = 30;
 
 // State
