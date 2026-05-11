@@ -20,13 +20,13 @@ const GOAL_HEIGHT = 130;
 const GOAL_Y = GROUND_Y - GOAL_HEIGHT;
 const BALL_RADIUS = 18;
 const PLAYER_RADIUS = 30;
-const PLAYER_SPEED = 5;
-const JUMP_FORCE = -10;
-const GRAVITY = 0.45;
+const PLAYER_SPEED = 6;
+const JUMP_FORCE = -11;
+const GRAVITY = 0.55;
 const KICK_FORCE = 12;
-const BALL_DAMPING = 0.99;
-const BALL_GROUND_DAMPING = 0.8;
-const BALL_BOUNCE = 0.7;
+const BALL_DAMPING = 0.995;
+const BALL_GROUND_DAMPING = 0.85;
+const BALL_BOUNCE = 0.75;
 const MATCH_DURATION = 60; // seconds
 const POWERUP_INTERVAL = 8000; // ms
 const COUNTDOWN_SECONDS = 3;
@@ -187,19 +187,26 @@ function resolvePlayerBallCollision(player, ball, isKicking) {
     const shotNx = sdx / sDist;
     const shotNy = sdy / sDist;
 
-    const SHOT_POWER = 16;
-    ball.vx = shotNx * SHOT_POWER + player.vx * 0.3;
-    ball.vy = shotNy * SHOT_POWER + player.vy * 0.2;
+    const SHOT_POWER = 18;
+    ball.vx = shotNx * SHOT_POWER + player.vx * 0.4;
+    ball.vy = shotNy * SHOT_POWER + player.vy * 0.3;
   } else {
-    // Normal head/body contact — push ball away
-    let force = 6;
-    ball.vx = nx * force + player.vx * 0.5;
-    ball.vy = ny * force + player.vy * 0.3;
+    // Normal head/body contact — push ball away with punch
+    let force = 8;
+    // Add player velocity for more dynamic feel
+    ball.vx = nx * force + player.vx * 0.7;
+    ball.vy = ny * force + player.vy * 0.5;
 
     // If heading ball from above, push it down and forward more
     if (dy > 0 && ny > 0.3) {
-      ball.vy = Math.abs(ball.vy) * 0.5;
-      ball.vx *= 1.3;
+      ball.vy = Math.abs(ball.vy) * 0.4;
+      ball.vx *= 1.5;
+    }
+
+    // If jumping into ball from below, loft it up nicely
+    if (ny < -0.3 && player.vy < -2) {
+      ball.vy = player.vy * 1.2;
+      ball.vx += (player.side === 'left' ? 3 : -3);
     }
   }
 }
