@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Game constants (must match client)
 const TICK_RATE = 60;
 const TICK_INTERVAL = 1000 / TICK_RATE;
-const CANVAS_W = 800;
+const CANVAS_W = 1000;
 const CANVAS_H = 500;
 const GROUND_Y = 440;
 const GOAL_WIDTH = 50;
@@ -53,7 +53,7 @@ function createBall() {
 
 function createPlayer(side) {
   return {
-    x: side === 'left' ? 200 : 600,
+    x: side === 'left' ? 250 : 750,
     y: GROUND_Y - PLAYER_RADIUS,
     vx: 0,
     vy: 0,
@@ -101,7 +101,7 @@ function resetPositions(game) {
   b.radius = BALL_RADIUS;
 
   const pl = game.players.left;
-  pl.x = 200;
+  pl.x = 250;
   pl.y = GROUND_Y - pl.radius;
   pl.vx = 0;
   pl.vy = 0;
@@ -109,7 +109,7 @@ function resetPositions(game) {
   pl.kicking = false;
 
   const pr = game.players.right;
-  pr.x = 600;
+  pr.x = 750;
   pr.y = GROUND_Y - pr.radius;
   pr.vx = 0;
   pr.vy = 0;
@@ -212,12 +212,12 @@ function resolvePlayerBallCollision(player, ball, isKicking) {
 
 function checkGoal(game) {
   const b = game.ball;
-  // Left goal
-  if (b.x - b.radius <= GOAL_WIDTH && b.y + b.radius > GOAL_Y && b.y - b.radius < GROUND_Y) {
+  // Left goal — ball center past the post line and within goal height
+  if (b.x < GOAL_WIDTH - 10 && b.y + b.radius > GOAL_Y && b.y - b.radius < GROUND_Y) {
     return 'right'; // right player scores
   }
   // Right goal
-  if (b.x + b.radius >= CANVAS_W - GOAL_WIDTH && b.y + b.radius > GOAL_Y && b.y - b.radius < GROUND_Y) {
+  if (b.x > CANVAS_W - GOAL_WIDTH + 10 && b.y + b.radius > GOAL_Y && b.y - b.radius < GROUND_Y) {
     return 'left'; // left player scores
   }
   return null;
@@ -381,38 +381,48 @@ function updateGame(room) {
     ball.vy = Math.abs(ball.vy) * BALL_BOUNCE;
   }
 
-  // Ball-walls
+  // Ball-walls — only bounce off walls ABOVE the goal opening
+  // Left wall
   if (ball.x - ball.radius < 0) {
     ball.x = ball.radius;
     ball.vx = Math.abs(ball.vx) * BALL_BOUNCE;
   }
+  // Right wall
   if (ball.x + ball.radius > CANVAS_W) {
     ball.x = CANVAS_W - ball.radius;
     ball.vx = -Math.abs(ball.vx) * BALL_BOUNCE;
   }
 
-  // Ball vs goal posts (physical collisions with the net structure)
-  // Left goal - right post
-  if (ball.x - ball.radius < GOAL_WIDTH + NET_POST_WIDTH && ball.x + ball.radius > GOAL_WIDTH) {
-    if (ball.y + ball.radius > GOAL_Y - CROSSBAR_HEIGHT && ball.y - ball.radius < GOAL_Y) {
-      // Crossbar hit
-      ball.y = GOAL_Y - CROSSBAR_HEIGHT - ball.radius;
-      ball.vy = -Math.abs(ball.vy) * BALL_BOUNCE;
-    } else if (ball.y - ball.radius < GOAL_Y) {
-      // Post hit
-      ball.x = GOAL_WIDTH + NET_POST_WIDTH + ball.radius;
-      ball.vx = Math.abs(ball.vx) * BALL_BOUNCE;
+  // Left goal post and crossbar
+  const inLeftGoalY = ball.y + ball.radius > GOAL_Y && ball.y - ball.radius < GROUND_Y;
+  if (!inLeftGoalY) {
+    // Above goal: bounce off the post line
+    if (ball.x - ball.radius < GOAL_WIDTH && ball.y + ball.radius > GOAL_Y - CROSSBAR_HEIGHT) {
+      // Crossbar bounce
+      if (ball.y + ball.radius > GOAL_Y - CROSSBAR_HEIGHT && ball.y - ball.radius < GOAL_Y) {
+        ball.y = GOAL_Y - CROSSBAR_HEIGHT - ball.radius;
+        ball.vy = -Math.abs(ball.vy) * BALL_BOUNCE;
+      }
+    }
+  } else {
+    // At goal height: post collision only at the post edge
+    if (ball.x - ball.radius < GOAL_WIDTH && ball.x + ball.radius > GOAL_WIDTH - NET_POST_WIDTH) {
+      if (ball.vx < 0) {
+        // Let ball pass through into the goal — no bounce here
+      } else {
+        // Ball coming out of goal, let it
+      }
     }
   }
 
-  // Right goal - left post
-  if (ball.x + ball.radius > CANVAS_W - GOAL_WIDTH - NET_POST_WIDTH && ball.x - ball.radius < CANVAS_W - GOAL_WIDTH) {
-    if (ball.y + ball.radius > GOAL_Y - CROSSBAR_HEIGHT && ball.y - ball.radius < GOAL_Y) {
-      ball.y = GOAL_Y - CROSSBAR_HEIGHT - ball.radius;
-      ball.vy = -Math.abs(ball.vy) * BALL_BOUNCE;
-    } else if (ball.y - ball.radius < GOAL_Y) {
-      ball.x = CANVAS_W - GOAL_WIDTH - NET_POST_WIDTH - ball.radius;
-      ball.vx = -Math.abs(ball.vx) * BALL_BOUNCE;
+  // Right goal post and crossbar
+  const inRightGoalY = ball.y + ball.radius > GOAL_Y && ball.y - ball.radius < GROUND_Y;
+  if (!inRightGoalY) {
+    if (ball.x + ball.radius > CANVAS_W - GOAL_WIDTH && ball.y + ball.radius > GOAL_Y - CROSSBAR_HEIGHT) {
+      if (ball.y + ball.radius > GOAL_Y - CROSSBAR_HEIGHT && ball.y - ball.radius < GOAL_Y) {
+        ball.y = GOAL_Y - CROSSBAR_HEIGHT - ball.radius;
+        ball.vy = -Math.abs(ball.vy) * BALL_BOUNCE;
+      }
     }
   }
 

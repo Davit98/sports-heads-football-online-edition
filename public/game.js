@@ -7,7 +7,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Constants
-const CANVAS_W = 800;
+const CANVAS_W = 1000;
 const CANVAS_H = 500;
 const GROUND_Y = 440;
 const GOAL_WIDTH = 50;
@@ -34,12 +34,6 @@ const TEAMS = [
   { name: 'Russia', flag: '\u{1F1F7}\u{1F1FA}', colors: ['#fff', '#d52b1e'] },
 ];
 
-// Client-side prediction constants (must match server)
-const PLAYER_SPEED = 3.5;
-const JUMP_FORCE = -8;
-const GRAVITY = 0.4;
-const PLAYER_RADIUS = 30;
-
 // State
 let selectedTeam = null;
 let mySide = null;
@@ -50,10 +44,6 @@ let currentScreen = 'menu';
 let goalAnimation = 0;
 let lastGoalScorer = null;
 let particles = [];
-
-// Client-side prediction state
-let predictedPos = { x: 0, y: 0, vx: 0, vy: 0, onGround: true };
-let predictionActive = false;
 
 // Input state
 const keys = {};
@@ -162,22 +152,12 @@ socket.on('game_start', (data) => {
   document.getElementById('hudRightTeam').textContent = rightTeam.name + ' ' + rightTeam.flag;
   particles = [];
   goalAnimation = 0;
-  // Initialize prediction position
-  predictedPos = {
-    x: mySide === 'left' ? 200 : 600,
-    y: GROUND_Y - PLAYER_RADIUS,
-    vx: 0, vy: 0, onGround: true
-  };
-  predictionActive = false;
   showScreen('game');
 });
 
 socket.on('game_state', (state) => {
   const prevState = gameState;
   gameState = state;
-
-  // Reconcile local prediction with server
-  reconcileWithServer();
 
   // Detect new goal
   if (prevState && state.state === 'goal_scored' && prevState.state === 'playing') {
@@ -243,69 +223,8 @@ document.addEventListener('keyup', (e) => {
   keys[e.code] = false;
 });
 
-// Client-side prediction — move our player locally for instant response
-function predictLocalPlayer() {
-  if (!gameState || currentScreen !== 'game' || !mySide) return;
-
-  const input = {
-    left: keys['ArrowLeft'] || false,
-    right: keys['ArrowRight'] || false,
-    up: keys['ArrowUp'] || false,
-    kick: keys['Space'] || false
-  };
-
-  const p = predictedPos;
-
-  // Movement
-  const speed = PLAYER_SPEED;
-  if (input.left) p.vx = -speed;
-  else if (input.right) p.vx = speed;
-  else p.vx = 0;
-
-  if (input.up && p.onGround) {
-    p.vy = JUMP_FORCE;
-    p.onGround = false;
-  }
-
-  // Gravity
-  p.vy += GRAVITY;
-  p.x += p.vx;
-  p.y += p.vy;
-
-  // Ground
-  if (p.y + PLAYER_RADIUS >= GROUND_Y) {
-    p.y = GROUND_Y - PLAYER_RADIUS;
-    p.vy = 0;
-    p.onGround = true;
-  }
-
-  // Walls
-  if (p.x - PLAYER_RADIUS < GOAL_WIDTH) p.x = GOAL_WIDTH + PLAYER_RADIUS;
-  if (p.x + PLAYER_RADIUS > CANVAS_W - GOAL_WIDTH) p.x = CANVAS_W - GOAL_WIDTH - PLAYER_RADIUS;
-
-  // Ceiling
-  if (p.y - PLAYER_RADIUS < 0) {
-    p.y = PLAYER_RADIUS;
-    p.vy = Math.abs(p.vy) * 0.3;
-  }
-
-  predictionActive = true;
-}
-
-// Reconcile prediction with server state
-function reconcileWithServer() {
-  if (!gameState || !mySide || !predictionActive) return;
-
-  const serverPlayer = gameState.players[mySide];
-  const p = predictedPos;
-
-  // Smoothly blend toward server position to prevent drift
-  const lerpFactor = 0.3;
-  p.x += (serverPlayer.x - p.x) * lerpFactor;
-  p.y += (serverPlayer.y - p.y) * lerpFactor;
-}
-
-// Send inputs to server
+// Send inputs to server — emit immediately on key change for responsiveness
+let lastInput = {};
 function sendInput() {
   if (currentScreen !== 'game') return;
   const input = {
@@ -314,9 +233,15 @@ function sendInput() {
     up: keys['ArrowUp'] || false,
     kick: keys['Space'] || false
   };
+  // Only send if input changed, or always at tick rate
   socket.emit('player_input', input);
+  lastInput = input;
 }
 setInterval(sendInput, 1000 / 60);
+
+// Also send immediately on key press/release for lower latency
+document.addEventListener('keydown', () => sendInput());
+document.addEventListener('keyup', () => sendInput());
 
 // Particles
 function spawnGoalParticles(side) {
@@ -817,9 +742,6 @@ function render() {
     return;
   }
 
-  // Run client-side prediction each frame
-  predictLocalPlayer();
-
   ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
   drawField();
@@ -827,20 +749,11 @@ function render() {
   // Layer order: goal nets (back) → players + ball → goal posts (front)
   drawGoalNets();
 
-  // Draw players — use predicted position for our own player
-  let leftPlayerData = gameState.players.left;
-  let rightPlayerData = gameState.players.right;
+  // Draw players
+  drawPlayer(gameState.players.left, leftTeam);
+  drawPlayer(gameState.players.right, rightTeam);
 
-  if (mySide === 'left' && predictionActive) {
-    leftPlayerData = { ...leftPlayerData, x: predictedPos.x, y: predictedPos.y };
-  } else if (mySide === 'right' && predictionActive) {
-    rightPlayerData = { ...rightPlayerData, x: predictedPos.x, y: predictedPos.y };
-  }
-
-  drawPlayer(leftPlayerData, leftTeam);
-  drawPlayer(rightPlayerData, rightTeam);
-
-  // Draw ball (between net and posts so it appears inside the goal)
+  // Draw ball
   drawBall(gameState.ball);
 
   // Draw posts on top of everything
